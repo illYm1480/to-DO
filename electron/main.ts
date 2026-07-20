@@ -8,5 +8,5 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { void shell.openExternal(url); return { action: 'deny' } });
   process.env.VITE_DEV_SERVER_URL ? void win.loadURL(process.env.VITE_DEV_SERVER_URL) : void win.loadFile(path.join(__dirname, '../dist/index.html'));
 }
-app.whenReady().then(() => { initDatabase(app.getPath('userData')); startServer(); createWindow(); app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow()) });
+app.whenReady().then(async () => { await initDatabase(app.getPath('userData')); startServer(); createWindow(); app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow()) });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() });

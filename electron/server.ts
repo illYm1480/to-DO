@@ -1,20 +1,12 @@
-import crypto from 'node:crypto';
-import cors from 'cors';
-import express from 'express';
-import path from 'node:path';
-import { createItem, deleteItem, listItems, login, register, updateItem, type ItemKind } from './database';
-
-const sessions = new Map<string, { id: number; nickname: string }>();
-export function startServer(options: { port?: number; host?: string; staticDirectory?: string } = {}) {
-  const api = express(); api.use(cors({ origin: 'http://localhost:5173' })); api.use(express.json());
-  const auth = (req: express.Request, res: express.Response, next: express.NextFunction) => { const token = req.headers.authorization?.replace('Bearer ', ''); const user = token && sessions.get(token); if (!user) return res.status(401).json({ message: 'Войдите в профиль.' }); res.locals.user = user; next() };
-  const issue = (user: { id: number; nickname: string }) => { const token = crypto.randomBytes(32).toString('hex'); sessions.set(token, user); return { token, user } };
-  api.post('/api/auth/register', (req, res) => { const nickname = String(req.body.nickname ?? '').trim(); const password = String(req.body.password ?? ''); if (nickname.length < 3 || password.length < 4) return res.status(400).json({ message: 'Никнейм — от 3 символов, пароль — от 4.' }); const user = register(nickname, password); return user ? res.status(201).json(issue(user)) : res.status(409).json({ message: 'Такой никнейм уже существует.' }) });
-  api.post('/api/auth/login', (req, res) => { const user = login(String(req.body.nickname ?? ''), String(req.body.password ?? '')); return user ? res.json(issue(user)) : res.status(401).json({ message: 'Неверный никнейм или пароль.' }) });
-  api.get('/api/items', auth, (_req, res) => res.json(listItems(res.locals.user.id)));
-  api.post('/api/items', auth, (req, res) => { const title = String(req.body.title ?? '').trim(); const allowed: ItemKind[] = ['goal','task','plan','note']; if (!title || !allowed.includes(req.body.kind)) return res.status(400).json({ message:'Укажите название и тип записи.' }); return res.status(201).json(createItem(res.locals.user.id, { kind:req.body.kind, title, description:String(req.body.description ?? ''), status:String(req.body.status ?? 'active'), dueDate:req.body.dueDate || null })) });
-  api.patch('/api/items/:id', auth, (req,res) => { const item = updateItem(res.locals.user.id, Number(req.params.id), req.body); return item ? res.json(item) : res.status(404).end() });
-  api.delete('/api/items/:id', auth, (req,res) => deleteItem(res.locals.user.id, Number(req.params.id)) ? res.status(204).end() : res.status(404).end());
-  if (options.staticDirectory) { api.use(express.static(options.staticDirectory)); api.get('*path', (_req, res) => res.sendFile(path.join(options.staticDirectory!, 'index.html'))) }
-  return api.listen(options.port ?? 47831, options.host ?? '127.0.0.1');
-}
+import crypto from 'node:crypto';import cors from 'cors';import express from 'express';import path from 'node:path';
+import{createItem,deleteItem,listItems,login,register,updateItem,type ItemKind}from'./database';
+const sessions=new Map<string,{id:number;nickname:string}>();
+export function startServer(options:{port?:number;host?:string;staticDirectory?:string}={}){const api=express();api.use(cors({origin:'http://localhost:5173'}));api.use(express.json());
+const auth=(req:express.Request,res:express.Response,next:express.NextFunction)=>{const token=req.headers.authorization?.replace('Bearer ','');const user=token&&sessions.get(token);if(!user)return res.status(401).json({message:'Войдите в профиль.'});res.locals.user=user;next()};
+const issue=(user:{id:number;nickname:string})=>{const token=crypto.randomBytes(32).toString('hex');sessions.set(token,user);return{token,user}};
+api.post('/api/auth/register',async(req,res)=>{const nickname=String(req.body.nickname??'').trim(),password=String(req.body.password??'');if(nickname.length<3||password.length<4)return res.status(400).json({message:'Никнейм — от 3 символов, пароль — от 4.'});const user=await register(nickname,password);return user?res.status(201).json(issue(user)):res.status(409).json({message:'Такой никнейм уже существует.'})});
+api.post('/api/auth/login',async(req,res)=>{const user=await login(String(req.body.nickname??''),String(req.body.password??''));return user?res.json(issue(user)):res.status(401).json({message:'Неверный никнейм или пароль.'})});
+api.get('/api/items',auth,async(_req,res)=>res.json(await listItems(res.locals.user.id)));
+api.post('/api/items',auth,async(req,res)=>{const title=String(req.body.title??'').trim();const allowed:ItemKind[]=['goal','task','plan','note'];if(!title||!allowed.includes(req.body.kind))return res.status(400).json({message:'Укажите название и тип записи.'});return res.status(201).json(await createItem(res.locals.user.id,{kind:req.body.kind,title,description:String(req.body.description??''),status:String(req.body.status??'active'),dueDate:req.body.dueDate||null}))});
+api.patch('/api/items/:id',auth,async(req,res)=>{const item=await updateItem(res.locals.user.id,Number(req.params.id),req.body);return item?res.json(item):res.status(404).end()});api.delete('/api/items/:id',auth,async(req,res)=>(await deleteItem(res.locals.user.id,Number(req.params.id)))?res.status(204).end():res.status(404).end());
+if(options.staticDirectory){api.use(express.static(options.staticDirectory));api.get('*path',(_req,res)=>res.sendFile(path.join(options.staticDirectory!,'index.html')))}return api.listen(options.port??47831,options.host??'127.0.0.1')}

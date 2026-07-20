@@ -1,45 +1,22 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-
-export type ItemKind = 'goal' | 'task' | 'plan' | 'note';
-export interface WorkspaceItem { id: number; ownerId: number; kind: ItemKind; title: string; description: string; status: string; dueDate: string | null; createdAt: string }
-interface User { id: number; nickname: string; nicknameKey: string; passwordHash: string; salt: string; createdAt: string }
-interface Store { users: User[]; items: WorkspaceItem[] }
-
-let filePath = '';
-let store: Store = { users: [], items: [] };
-function save() { const temporary = `${filePath}.tmp`; fs.writeFileSync(temporary, JSON.stringify(store, null, 2), 'utf8'); fs.renameSync(temporary, filePath) }
-function hash(password: string, salt: string) { return crypto.scryptSync(password, salt, 64).toString('hex') }
-
-export function initDatabase(dataDirectory: string) {
-  fs.mkdirSync(dataDirectory, { recursive: true });
-  filePath = path.join(dataDirectory, 'compass-data.json');
-  if (!fs.existsSync(filePath)) return;
-  try {
-    const raw = JSON.parse(fs.readFileSync(filePath, 'utf8')) as Store | WorkspaceItem[];
-    store = Array.isArray(raw) ? { users: [], items: raw } : { users: raw.users ?? [], items: raw.items ?? [] };
-  } catch { store = { users: [], items: [] } }
+import { Pool } from 'pg';
+export type ItemKind='goal'|'task'|'plan'|'note';
+export interface WorkspaceItem{id:number;ownerId:number;kind:ItemKind;title:string;description:string;status:string;dueDate:string|null;createdAt:string}
+interface User{id:number;nickname:string;nicknameKey:string;passwordHash:string;salt:string;createdAt:string}
+interface Store{users:User[];items:WorkspaceItem[]}
+let filePath='';let store:Store={users:[],items:[]};let pool:Pool|undefined;
+const hash=(p:string,s:string)=>crypto.scryptSync(p,s,64).toString('hex');
+const save=()=>{const t=`${filePath}.tmp`;fs.writeFileSync(t,JSON.stringify(store,null,2),'utf8');fs.renameSync(t,filePath)};
+export async function initDatabase(dataDirectory:string){
+ if(process.env.DATABASE_URL){pool=new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}});await pool.query(`CREATE TABLE IF NOT EXISTS users(id SERIAL PRIMARY KEY,nickname TEXT NOT NULL,nickname_key TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,salt TEXT NOT NULL,created_at TIMESTAMPTZ DEFAULT NOW());CREATE TABLE IF NOT EXISTS items(id SERIAL PRIMARY KEY,owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,kind TEXT NOT NULL,title TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'active',due_date TEXT,created_at TIMESTAMPTZ DEFAULT NOW())`);return}
+ fs.mkdirSync(dataDirectory,{recursive:true});filePath=path.join(dataDirectory,'compass-data.json');if(fs.existsSync(filePath))try{const r=JSON.parse(fs.readFileSync(filePath,'utf8')) as Store|WorkspaceItem[];store=Array.isArray(r)?{users:[],items:r}:r}catch{store={users:[],items:[]}}
 }
-export function register(nickname: string, password: string) {
-  const nicknameKey = nickname.trim().toLocaleLowerCase('ru-RU');
-  if (store.users.some(user => user.nicknameKey === nicknameKey)) return undefined;
-  const salt = crypto.randomBytes(16).toString('hex');
-  const user: User = { id: store.users.reduce((m, u) => Math.max(m, u.id), 0) + 1, nickname: nickname.trim(), nicknameKey, passwordHash: hash(password, salt), salt, createdAt: new Date().toISOString() };
-  store.users.push(user);
-  // Старые локальные записи принадлежат первому созданному профилю.
-  if (store.users.length === 1) store.items = store.items.map(item => ({ ...item, ownerId: user.id }));
-  save(); return { id: user.id, nickname: user.nickname };
-}
-export function login(nickname: string, password: string) {
-  const user = store.users.find(value => value.nicknameKey === nickname.trim().toLocaleLowerCase('ru-RU'));
-  if (!user) return undefined;
-  const expected = Buffer.from(user.passwordHash, 'hex'); const actual = Buffer.from(hash(password, user.salt), 'hex');
-  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual) ? { id: user.id, nickname: user.nickname } : undefined;
-}
-export function listItems(ownerId: number) { return store.items.filter(i => i.ownerId === ownerId).sort((a, b) => b.id - a.id) }
-export function createItem(ownerId: number, input: Omit<WorkspaceItem, 'id' | 'ownerId' | 'createdAt'>): WorkspaceItem {
-  const item = { ...input, ownerId, id: store.items.reduce((m, i) => Math.max(m, i.id), 0) + 1, createdAt: new Date().toISOString() }; store.items.push(item); save(); return item;
-}
-export function updateItem(ownerId: number, id: number, patch: Partial<WorkspaceItem>) { const index = store.items.findIndex(i => i.id === id && i.ownerId === ownerId); if (index < 0) return undefined; store.items[index] = { ...store.items[index], ...patch, id, ownerId }; save(); return store.items[index] }
-export function deleteItem(ownerId: number, id: number) { const before = store.items.length; store.items = store.items.filter(i => !(i.id === id && i.ownerId === ownerId)); if (before !== store.items.length) save(); return before !== store.items.length }
+export async function register(nickname:string,password:string){const key=nickname.trim().toLocaleLowerCase('ru-RU'),salt=crypto.randomBytes(16).toString('hex');if(pool){try{const r=await pool.query('INSERT INTO users(nickname,nickname_key,password_hash,salt) VALUES($1,$2,$3,$4) RETURNING id,nickname',[nickname.trim(),key,hash(password,salt),salt]);return r.rows[0]}catch{return undefined}}if(store.users.some(u=>u.nicknameKey===key))return;const u:User={id:Math.max(0,...store.users.map(x=>x.id))+1,nickname:nickname.trim(),nicknameKey:key,passwordHash:hash(password,salt),salt,createdAt:new Date().toISOString()};store.users.push(u);if(store.users.length===1)store.items=store.items.map(i=>({...i,ownerId:u.id}));save();return{id:u.id,nickname:u.nickname}}
+export async function login(nickname:string,password:string){const key=nickname.trim().toLocaleLowerCase('ru-RU');let u:any;if(pool){const r=await pool.query('SELECT id,nickname,password_hash AS "passwordHash",salt FROM users WHERE nickname_key=$1',[key]);u=r.rows[0]}else u=store.users.find(x=>x.nicknameKey===key);if(!u)return;const a=Buffer.from(hash(password,u.salt),'hex'),b=Buffer.from(u.passwordHash,'hex');return a.length===b.length&&crypto.timingSafeEqual(a,b)?{id:u.id,nickname:u.nickname}:undefined}
+const mapRow=(r:any):WorkspaceItem=>({id:r.id,ownerId:r.owner_id,kind:r.kind,title:r.title,description:r.description,status:r.status,dueDate:r.due_date,createdAt:String(r.created_at)});
+export async function listItems(ownerId:number){if(pool)return(await pool.query('SELECT * FROM items WHERE owner_id=$1 ORDER BY id DESC',[ownerId])).rows.map(mapRow);return store.items.filter(i=>i.ownerId===ownerId).sort((a,b)=>b.id-a.id)}
+export async function createItem(ownerId:number,input:Omit<WorkspaceItem,'id'|'ownerId'|'createdAt'>){if(pool){const r=await pool.query('INSERT INTO items(owner_id,kind,title,description,status,due_date) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[ownerId,input.kind,input.title,input.description,input.status,input.dueDate]);return mapRow(r.rows[0])}const i={...input,ownerId,id:Math.max(0,...store.items.map(x=>x.id))+1,createdAt:new Date().toISOString()};store.items.push(i);save();return i}
+export async function updateItem(ownerId:number,id:number,patch:Partial<WorkspaceItem>){if(pool){const current=(await pool.query('SELECT * FROM items WHERE id=$1 AND owner_id=$2',[id,ownerId])).rows[0];if(!current)return;const r=await pool.query('UPDATE items SET kind=$1,title=$2,description=$3,status=$4,due_date=$5 WHERE id=$6 AND owner_id=$7 RETURNING *',[patch.kind??current.kind,patch.title??current.title,patch.description??current.description,patch.status??current.status,patch.dueDate===undefined?current.due_date:patch.dueDate,id,ownerId]);return mapRow(r.rows[0])}const n=store.items.findIndex(i=>i.id===id&&i.ownerId===ownerId);if(n<0)return;store.items[n]={...store.items[n],...patch,id,ownerId};save();return store.items[n]}
+export async function deleteItem(ownerId:number,id:number){if(pool)return(await pool.query('DELETE FROM items WHERE id=$1 AND owner_id=$2',[id,ownerId])).rowCount===1;const n=store.items.length;store.items=store.items.filter(i=>!(i.id===id&&i.ownerId===ownerId));if(n!==store.items.length)save();return n!==store.items.length}
