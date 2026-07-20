@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Check, Compass, LayoutDashboard, ListTodo, LogOut, NotebookPen, Plus, Search, Sparkles, Target, Trash2, X } from 'lucide-react';
+import { Apple, CalendarDays, Check, ChevronRight, Compass, Download, LayoutDashboard, ListTodo, LogOut, Monitor, NotebookPen, Plus, Search, Share, Sparkles, Target, Trash2, X } from 'lucide-react';
 import { addItem, authenticate, getItems, logout, removeItem, toggleItem } from './api';
 import type { ItemKind, WorkspaceItem } from './types';
 
@@ -12,6 +12,7 @@ const meta = {
 type View = 'dashboard' | ItemKind;
 
 export default function App() {
+  if (window.location.pathname === '/download') return <DownloadPage/>;
   const [user, setUser] = useState<{ id:number; nickname:string } | null>(null);
   const [items, setItems] = useState<WorkspaceItem[]>([]);
   const [view, setView] = useState<View>('dashboard');
@@ -58,6 +59,8 @@ export default function App() {
     {open && <div className="backdrop" onMouseDown={() => setOpen(false)}><form className="modal" onSubmit={submit} onMouseDown={e => e.stopPropagation()}><div className="modal-head"><div><small>НОВАЯ ЗАПИСЬ</small><h2>Добавьте что-то важное</h2></div><button type="button" onClick={() => setOpen(false)}><X/></button></div><label>Тип<div className="kinds">{keys.map(k => { const Icon = meta[k].icon; return <button type="button" key={k} className={kind === k ? 'selected' : ''} onClick={() => setKind(k)}><Icon/>{meta[k].one}</button> })}</div></label><label>Название<input autoFocus value={title} onChange={e => setTitle(e.target.value)} placeholder="Например: Выучить английский до B2"/></label><label>Описание<textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Почему это важно? Что нужно сделать?"/></label><label>Дата<input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}/></label><div className="actions"><button type="button" onClick={() => setOpen(false)}>Отмена</button><button className="primary">Сохранить запись</button></div></form></div>}
   </div>
 }
+
+function DownloadPage(){const windowsUrl='https://github.com/illYm1480/to-DO/releases/download/v0.3.0/to-DO-Setup-0.3.0.exe';return <div className="download-page"><div className="download-glow"/><header><div className="download-brand"><i><Compass/></i>to-DO</div><a href="/">Открыть веб-версию <ChevronRight/></a></header><main><div className="download-hero"><span>ДЛЯ ВСЕХ ВАШИХ УСТРОЙСТВ</span><h1>Ваши планы всегда рядом.</h1><p>Выберите устройство и начните пользоваться to-DO. Один аккаунт — единое пространство на компьютере и телефоне.</p></div><section className="platform-grid"><article className="platform"><div className="platform-icon"><Monitor/></div><div><small>WINDOWS 10 И НОВЕЕ</small><h2>Приложение для Windows</h2><p>Полноценное отдельное приложение с ярлыком на рабочем столе.</p></div><a className="download-button" href={windowsUrl}><Download/> Скачать для Windows</a><footer>Версия 0.3.0 · 64-bit · около 102 МБ</footer></article><article className="platform ios"><div className="platform-icon"><Apple/></div><div><small>IPHONE И IPAD</small><h2>Установить на iOS</h2><p>Откройте to-DO в Safari, нажмите «Поделиться», затем «На экран Домой».</p></div><a className="download-button secondary" href="/"><Share/> Открыть в Safari</a><footer>Не требует App Store · облачная синхронизация</footer></article></section><div className="download-note"><Sparkles/><span><strong>Можно ничего не устанавливать.</strong> to-DO работает прямо в браузере на Windows, macOS, iOS и Android.</span><a href="/">Открыть сейчас</a></div></main></div>}
 
 function AuthScreen({ onAuthenticated }: { onAuthenticated:(user:{id:number;nickname:string}) => void }) {
   const [mode, setMode] = useState<'login'|'register'>('login'); const [nickname,setNickname] = useState(''); const [password,setPassword] = useState(''); const [error,setError] = useState(''); const [busy,setBusy] = useState(false);
