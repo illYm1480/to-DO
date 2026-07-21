@@ -1,4 +1,4 @@
-import type { FinanceTransaction, ItemKind, TransactionType, WorkspaceItem } from './types';
+import type { FinanceGoal, FinanceTransaction, ItemKind, TransactionType, WorkspaceItem } from './types';
 const baseUrl = window.location.protocol === 'file:' ? 'http://127.0.0.1:47831/api' : '/api';
 let token = '';
 async function request(path: string, init?: RequestInit) {
@@ -16,3 +16,7 @@ export async function removeItem(id:number) { await request(`/items/${id}`, { me
 export async function getTransactions():Promise<FinanceTransaction[]>{return request('/finance/transactions')}
 export async function addTransaction(input:{type:TransactionType;amount:number;category:string;note:string;transactionDate:string}){return request('/finance/transactions',{method:'POST',body:JSON.stringify(input)}) as Promise<FinanceTransaction>}
 export async function removeTransaction(id:number){await request(`/finance/transactions/${id}`,{method:'DELETE'})}
+export async function getFinanceGoals():Promise<FinanceGoal[]>{return request('/finance/goals')}
+export async function addFinanceGoal(input:{title:string;targetAmount:number;savedAmount:number;deadline:string|null}){return request('/finance/goals',{method:'POST',body:JSON.stringify(input)}) as Promise<FinanceGoal>}
+export async function contributeToGoal(id:number,amount:number){return request(`/finance/goals/${id}/contribute`,{method:'POST',body:JSON.stringify({amount})}) as Promise<FinanceGoal>}
+export async function removeFinanceGoal(id:number){await request(`/finance/goals/${id}`,{method:'DELETE'})}
