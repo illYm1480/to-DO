@@ -1,4 +1,4 @@
-import type { ItemKind, WorkspaceItem } from './types';
+import type { FinanceTransaction, ItemKind, TransactionType, WorkspaceItem } from './types';
 const baseUrl = window.location.protocol === 'file:' ? 'http://127.0.0.1:47831/api' : '/api';
 let token = '';
 async function request(path: string, init?: RequestInit) {
@@ -13,3 +13,6 @@ export async function getItems(): Promise<WorkspaceItem[]> { return request('/it
 export async function addItem(input: { kind:ItemKind; title:string; description:string; dueDate:string|null }) { return request('/items', { method:'POST', body:JSON.stringify(input) }) as Promise<WorkspaceItem> }
 export async function toggleItem(item: WorkspaceItem) { return request(`/items/${item.id}`, { method:'PATCH', body:JSON.stringify({ status:item.status === 'done' ? 'active' : 'done' }) }) as Promise<WorkspaceItem> }
 export async function removeItem(id:number) { await request(`/items/${id}`, { method:'DELETE' }) }
+export async function getTransactions():Promise<FinanceTransaction[]>{return request('/finance/transactions')}
+export async function addTransaction(input:{type:TransactionType;amount:number;category:string;note:string;transactionDate:string}){return request('/finance/transactions',{method:'POST',body:JSON.stringify(input)}) as Promise<FinanceTransaction>}
+export async function removeTransaction(id:number){await request(`/finance/transactions/${id}`,{method:'DELETE'})}
